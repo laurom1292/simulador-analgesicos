@@ -164,11 +164,6 @@
             box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
         }
         
-        canvas {
-            max-width: 100%;
-            height: 400px !important;
-        }
-        
         .results-display {
             background: white;
             padding: 20px;
@@ -383,8 +378,6 @@
                             <span class="result-value" id="hp-mpe">-- %</span>
                         </div>
                     </div>
-                    
-                    <canvas id="hp-chart" style="margin-top: 20px;"></canvas>
                 </div>
             </div>
         </div>
@@ -452,8 +445,6 @@
                             <span class="result-value" id="tf-60min">-- s</span>
                         </div>
                     </div>
-                    
-                    <canvas id="tf-chart" style="margin-top: 20px;"></canvas>
                 </div>
             </div>
         </div>
@@ -512,8 +503,6 @@
                         </div>
                     </div>
                     
-                    <canvas id="dr-chart" style="margin-top: 20px;"></canvas>
-                    
                     <table class="data-table" id="dr-table" style="display:none;">
                         <thead>
                             <tr>
@@ -559,8 +548,6 @@
                 
                 <div class="results-panel">
                     <h3>Resultados Comparativos</h3>
-                    
-                    <canvas id="comp-chart" style="margin-top: 20px;"></canvas>
                     
                     <table class="data-table" id="comp-table" style="display:none;">
                         <thead>
@@ -641,11 +628,7 @@
         </div>
     </div>
     
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        // Variables globales
-        let charts = {};
-        
         // Datos de fármacos
         const drugData = {
             control: { 
@@ -733,8 +716,254 @@
             event.target.classList.add('active');
             document.getElementById(tabName).classList.add('active');
         }
-        
-        // Funciones de actualización de valores
+
+// Funciones de actualización de valores
         function updateDoseValue(prefix) {
             const dose = document.getElementById(prefix + '-dose').value;
-            document.getElementById(prefix +
+            document.getElementById(prefix + '-dose-value').textContent = dose + ' mg/kg';
+        }
+        
+        function updateTempValue() {
+            const temp = document.getElementById('hp-temp').value;
+            document.getElementById('hp-temp-value').textContent = temp + '°C';
+        }
+        
+        // Función para calcular efecto
+        function calculateEffect(drug, dose, baseLatency) {
+            if (!drugData[drug]) return baseLatency;
+            
+            const data = drugData[drug];
+            if (data.ed50 === null) return baseLatency;
+            
+            // Ecuación de Hill
+            const effect = data.emax * Math.pow(dose, data.hill) / 
+                          (Math.pow(data.ed50, data.hill) + Math.pow(dose, data.hill));
+            
+            // Calcular nueva latencia
+            const maxLatency = 30; // cutoff
+            const newLatency = baseLatency + (effect / 100) * (maxLatency - baseLatency);
+            
+            return Math.min(newLatency, maxLatency);
+        }
+        
+        // Test de Placa Caliente
+        function runHotPlateTest() {
+            const drug = document.getElementById('hp-drug').value;
+            const dose = parseFloat(document.getElementById('hp-dose').value);
+            const temp = parseFloat(document.getElementById('hp-temp').value);
+            
+            // Calcular latencia basal (inversamente proporcional a temperatura)
+            const baseLatency = 30 - (temp - 48) * 2.5;
+            const variability = (Math.random() - 0.5) * 2;
+            const basalLatency = Math.max(5, Math.min(15, baseLatency + variability));
+            
+            // Calcular latencia post-fármaco
+            const postLatency = calculateEffect(drug, dose, basalLatency);
+            
+            // Calcular %MPE
+            const cutoff = 30;
+            const mpe = ((postLatency - basalLatency) / (cutoff - basalLatency)) * 100;
+            
+            // Actualizar UI
+            document.getElementById('hp-baseline').textContent = basalLatency.toFixed(1) + ' s';
+            document.getElementById('hp-postdrug').textContent = postLatency.toFixed(1) + ' s';
+            document.getElementById('hp-mpe').textContent = mpe.toFixed(1) + ' %';
+            
+            // Animar ratón
+            const mouse = document.getElementById('hp-mouse');
+            const status = document.getElementById('hp-status');
+            
+            mouse.className = 'mouse-icon mouse-pain';
+            status.textContent = 'Administrando fármaco...';
+            
+            setTimeout(() => {
+                if (mpe > 50) {
+                    mouse.className = 'mouse-icon mouse-analgesic';
+                    status.textContent = 'Efecto analgésico detectado';
+                } else if (mpe > 20) {
+                    mouse.className = 'mouse-icon mouse-normal';
+                    status.textContent = 'Efecto analgésico leve';
+                } else {
+                    mouse.className = 'mouse-icon mouse-pain';
+                    status.textContent = 'Sin efecto analgésico significativo';
+                }
+            }, 1500);
+        }
+        
+        function resetHotPlate() {
+            document.getElementById('hp-baseline').textContent = '-- s';
+            document.getElementById('hp-postdrug').textContent = '-- s';
+            document.getElementById('hp-mpe').textContent = '-- %';
+            document.getElementById('hp-mouse').className = 'mouse-icon mouse-normal';
+            document.getElementById('hp-status').textContent = 'Esperando inicio del experimento...';
+            document.getElementById('hp-dose').value = 5;
+            document.getElementById('hp-dose-value').textContent = '5 mg/kg';
+        }
+        
+        // Test de Tail Flick
+        function runTailFlickTest() {
+            const drug = document.getElementById('tf-drug').value;
+            const dose = parseFloat(document.getElementById('tf-dose').value);
+            const intensity = document.getElementById('tf-intensity').value;
+            
+            // Latencia basal según intensidad
+            let baseLatency = intensity === 'low' ? 4 : intensity === 'medium' ? 3 : 2;
+            baseLatency += (Math.random() - 0.5) * 0.5;
+            
+            // Calcular latencias en diferentes tiempos
+            const latencies = {
+                0: baseLatency,
+                15: calculateEffect(drug, dose, baseLatency) * 0.9,
+                30: calculateEffect(drug, dose, baseLatency),
+                60: calculateEffect(drug, dose, baseLatency) * 0.7
+            };
+            
+            // Si es naloxona o combinación, reducir efecto
+            if (drug === 'naloxone' || drug === 'morphine-naloxone') {
+                latencies[15] = baseLatency;
+                latencies[30] = baseLatency;
+                latencies[60] = baseLatency;
+            }
+            
+            // Actualizar UI
+            document.getElementById('tf-baseline').textContent = latencies[0].toFixed(1) + ' s';
+            document.getElementById('tf-15min').textContent = latencies[15].toFixed(1) + ' s';
+            document.getElementById('tf-30min').textContent = latencies[30].toFixed(1) + ' s';
+            document.getElementById('tf-60min').textContent = latencies[60].toFixed(1) + ' s';
+        }
+        
+        function resetTailFlick() {
+            document.getElementById('tf-baseline').textContent = '-- s';
+            document.getElementById('tf-15min').textContent = '-- s';
+            document.getElementById('tf-30min').textContent = '-- s';
+            document.getElementById('tf-60min').textContent = '-- s';
+            document.getElementById('tf-dose').value = 5;
+            document.getElementById('tf-dose-value').textContent = '5 mg/kg';
+        }
+        
+        // Curva Dosis-Respuesta
+        function generateDoseResponse() {
+            const drug = document.getElementById('dr-drug').value;
+            const numPoints = parseInt(document.getElementById('dr-points').value);
+            const data = drugData[drug];
+            
+            if (!data || data.ed50 === null) {
+                alert('No hay datos disponibles para este fármaco');
+                return;
+            }
+            
+            // Generar puntos de dosis
+            const doses = [];
+            const effects = [];
+            const minDose = data.ed50 / 100;
+            const maxDose = data.ed50 * 100;
+            
+            for (let i = 0; i < numPoints; i++) {
+                const logDose = Math.log10(minDose) + (Math.log10(maxDose) - Math.log10(minDose)) * i / (numPoints - 1);
+                const dose = Math.pow(10, logDose);
+                doses.push(dose);
+                
+                // Calcular efecto con ecuación de Hill
+                const effect = data.emax * Math.pow(dose, data.hill) / 
+                              (Math.pow(data.ed50, data.hill) + Math.pow(dose, data.hill));
+                effects.push(effect);
+            }
+            
+            // Mostrar tabla
+            const table = document.getElementById('dr-table');
+            const tbody = document.getElementById('dr-table-body');
+            tbody.innerHTML = '';
+            
+            doses.forEach((dose, i) => {
+                const row = tbody.insertRow();
+                row.insertCell(0).textContent = dose.toFixed(3);
+                row.insertCell(1).textContent = effects[i].toFixed(1);
+                row.insertCell(2).textContent = '±' + (Math.random() * 5 + 2).toFixed(1);
+            });
+            
+            table.style.display = 'table';
+        }
+        
+        function calculateED50() {
+            const drug = document.getElementById('dr-drug').value;
+            const data = drugData[drug];
+            
+            if (!data || data.ed50 === null) {
+                alert('No hay datos disponibles para este fármaco');
+                return;
+            }
+            
+            document.getElementById('dr-ed50').textContent = data.ed50.toFixed(2) + ' mg/kg';
+            document.getElementById('dr-emax').textContent = data.emax.toFixed(1) + ' %';
+            document.getElementById('dr-slope').textContent = data.hill.toFixed(2);
+        }
+        
+        // Comparación de Fármacos
+        function runComparison() {
+            const testType = document.getElementById('comp-test').value;
+            const dose = parseFloat(document.getElementById('comp-dose').value);
+            
+            const table = document.getElementById('comp-table');
+            const tbody = document.getElementById('comp-table-body');
+            tbody.innerHTML = '';
+            
+            // Comparar todos los fármacos
+            const drugs = ['morphine', 'tramadol', 'fentanyl', 'paracetamol', 'ibuprofen', 'aspirin'];
+            
+            drugs.forEach(drug => {
+                const data = drugData[drug];
+                const baseLatency = testType === 'hotplate' ? 10 : 3;
+                const postLatency = calculateEffect(drug, dose, baseLatency);
+                const cutoff = testType === 'hotplate' ? 30 : 15;
+                const mpe = ((postLatency - baseLatency) / (cutoff - baseLatency)) * 100;
+                
+                const row = tbody.insertRow();
+                row.insertCell(0).textContent = data.name;
+                row.insertCell(1).textContent = data.class;
+                row.insertCell(2).textContent = baseLatency.toFixed(1);
+                row.insertCell(3).textContent = postLatency.toFixed(1);
+                row.insertCell(4).textContent = mpe.toFixed(1);
+                row.insertCell(5).textContent = data.potency.toFixed(3);
+            });
+            
+            table.style.display = 'table';
+        }
+        
+        function exportComparisonData() {
+            const table = document.getElementById('comp-table');
+            if (table.style.display === 'none') {
+                alert('Primero debe generar la comparación');
+                return;
+            }
+            
+            let csv = 'Fármaco,Clase,Latencia Basal,Latencia Post,MPE,Potencia Relativa\n';
+            const rows = document.getElementById('comp-table-body').rows;
+            
+            for (let row of rows) {
+                const rowData = [];
+                for (let cell of row.cells) {
+                    rowData.push(cell.textContent);
+                }
+                csv += rowData.join(',') + '\n';
+            }
+            
+            // Crear descarga
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'comparacion_analgesicos.csv';
+            a.click();
+        }
+        
+        // Inicialización
+        document.addEventListener('DOMContentLoaded', function() {
+            // Actualizar valores iniciales
+            updateDoseValue('hp');
+            updateDoseValue('tf');
+            updateTempValue();
+        });
+    </script>
+</body>
+</html>
+
